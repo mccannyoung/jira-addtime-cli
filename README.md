@@ -1,7 +1,11 @@
 # jira-addtime-cli
 A simple go program to add time to a JIRA issue via commandline.
 
-use:
+This program is meant to be compiled and distributed to others. Because of this, it relies on certain environmental variables to be set. jira_username, jira_password and jira_url (for the base url for the jira -- for on-demand it would look like https://my-company.atlassian.net/) are required to be set on the machine running the executable generated from this code.
+
+This app uses basic authentication, which isn't the safest option around.
+
+uses:
 ```
 \main.exe:
   -ticket string
