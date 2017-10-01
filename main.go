@@ -121,6 +121,7 @@ func AddWorklog(account AccountInfo, entry jira.WorklogRecord) error {
 	}
 
 	if resp.StatusCode == 201 {
+		fmt.Println("Time added successfully")
 		return nil
 	}
 	err = fmt.Errorf("Unexpected Response From POST")
