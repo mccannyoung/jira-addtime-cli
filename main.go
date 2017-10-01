@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"runtime"
@@ -14,7 +15,7 @@ import (
 )
 
 var (
-	appVer  = "unset"
+	appVer  = "1.0"
 	appHash = "unset"
 )
 
@@ -57,6 +58,34 @@ func main() {
 		fmt.Println("Invalid entry, please use -h for usage.")
 		os.Exit(0)
 	}
+	if os.Getenv("jira_url") == "" || os.Getenv("jira_username") == "" || os.Getenv("jira_password") == "" {
+		fmt.Println("This program requires environment variables be set for jira_username, jira_password with your account information, and jira_url for the base url for the Jira instance you want to log your time against")
+		os.Exit(0)
+	}
+
+	CheckAccess(issueKey)
+
+	worklogentry := jira.WorklogRecord{
+		IssueID:   issueKey,
+		Comment:   timeComment,
+		TimeSpent: timeToAdd,
+	}
+
+	AddWorklog(account, worklogentry)
+}
+
+//CheckAccess is a function to make sure you can hit the issue
+func CheckAccess(issueKey string) {
+
+	jiraUser := jira.User{
+		Name:     os.Getenv("jira_username"),
+		Password: os.Getenv("jira_password"),
+	}
+
+	account := AccountInfo{
+		jiraURL:  os.Getenv("jira_url"),
+		jiraUser: jiraUser,
+	}
 
 	jiraClient, err := jira.NewClient(nil, account.jiraURL)
 	if err != nil {
@@ -71,12 +100,6 @@ func main() {
 
 	fmt.Printf("Adding time to %s: %+v\n", issue.Key, issue.Fields.Summary)
 
-	worklogentry := jira.WorklogRecord{
-		Comment:   timeComment,
-		TimeSpent: timeToAdd,
-	}
-
-	AddWorklog(account, worklogentry)
 }
 
 // AddWorklog is a function to turn the data into the
@@ -116,6 +139,7 @@ func makeRequestWithContent(method string, uri string, content string, account A
 		req, _ = http.NewRequest(method, uri, bytes.NewBufferString(content))
 		return makeRequest(req, account)
 	}
+
 	return resp, err
 }
 
@@ -140,6 +164,12 @@ func makeRequest(req *http.Request, account AccountInfo) (resp *http.Response, e
 	runtime.SetFinalizer(resp, func(r *http.Response) {
 		r.Body.Close()
 	})
+
+	if resp.StatusCode != 201 {
+		fmt.Println("Return code from post request: ", resp.StatusCode)
+		b, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println("Error Body: ", string(b))
+	}
 
 	return resp, nil
 }
