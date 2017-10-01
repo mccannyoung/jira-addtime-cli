@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -28,16 +29,6 @@ type AccountInfo struct {
 
 func main() {
 
-	jiraUser := jira.User{
-		Name:     os.Getenv("jira_username"),
-		Password: os.Getenv("jira_password"),
-	}
-
-	account := AccountInfo{
-		jiraURL:  os.Getenv("jira_url"),
-		jiraUser: jiraUser,
-	}
-
 	var showVer bool
 	var issueKey, timeToAdd, timeComment string
 
@@ -58,34 +49,29 @@ func main() {
 		fmt.Println("Invalid entry, please use -h for usage.")
 		os.Exit(0)
 	}
+
 	if os.Getenv("jira_url") == "" || os.Getenv("jira_username") == "" || os.Getenv("jira_password") == "" {
 		fmt.Println("This program requires environment variables be set for jira_username, jira_password with your account information, and jira_url for the base url for the Jira instance you want to log your time against")
 		os.Exit(0)
 	}
 
-	CheckAccess(issueKey)
+	account, err := getAccountInfo()
+
+	checkAccess(issueKey, account)
 
 	worklogentry := jira.WorklogRecord{
 		IssueID:   issueKey,
 		Comment:   timeComment,
 		TimeSpent: timeToAdd,
 	}
-
-	AddWorklog(account, worklogentry)
+	if err == nil && account != nil {
+		addWorklog(account, worklogentry)
+	} else {
+		fmt.Println("the following err occured ", err)
+	}
 }
 
-//CheckAccess is a function to make sure you can hit the issue
-func CheckAccess(issueKey string) {
-
-	jiraUser := jira.User{
-		Name:     os.Getenv("jira_username"),
-		Password: os.Getenv("jira_password"),
-	}
-
-	account := AccountInfo{
-		jiraURL:  os.Getenv("jira_url"),
-		jiraUser: jiraUser,
-	}
+func checkAccess(issueKey string, account *AccountInfo) {
 
 	jiraClient, err := jira.NewClient(nil, account.jiraURL)
 	if err != nil {
@@ -102,8 +88,28 @@ func CheckAccess(issueKey string) {
 
 }
 
-// AddWorklog is a function to turn the data into the
-func AddWorklog(account AccountInfo, entry jira.WorklogRecord) error {
+func getAccountInfo() (*AccountInfo, error) {
+
+	if os.Getenv("jira_url") == "" || os.Getenv("jira_username") == "" || os.Getenv("jira_password") == "" {
+		err := errors.New("Environment variable account information missing")
+		return nil, err
+	}
+	jiraUser := jira.User{
+		Name:     os.Getenv("jira_username"),
+		Password: os.Getenv("jira_password"),
+	}
+
+	account := AccountInfo{
+		jiraURL:  os.Getenv("jira_url"),
+		jiraUser: jiraUser,
+	}
+
+	return &account, nil
+
+}
+
+func addWorklog(account *AccountInfo, entry jira.WorklogRecord) error {
+
 	uri := fmt.Sprintf("%srest/api/2/issue/%s/worklog", account.jiraURL, entry.IssueID)
 
 	worklogData := map[string]interface{}{
@@ -117,6 +123,7 @@ func AddWorklog(account AccountInfo, entry jira.WorklogRecord) error {
 
 	resp, err := makeRequestWithContent("POST", uri, jsonStr, account)
 	if err != nil {
+		fmt.Println("An error occured", err)
 		return err
 	}
 
@@ -125,11 +132,13 @@ func AddWorklog(account AccountInfo, entry jira.WorklogRecord) error {
 		return nil
 	}
 
+	fmt.Println("Time not added successfully ", resp.StatusCode)
+
 	err = fmt.Errorf("Unexpected Response From POST")
 	return err
 }
 
-func makeRequestWithContent(method string, uri string, content string, account AccountInfo) (resp *http.Response, err error) {
+func makeRequestWithContent(method string, uri string, content string, account *AccountInfo) (resp *http.Response, err error) {
 	buffer := bytes.NewBufferString(content)
 	req, _ := http.NewRequest(method, uri, buffer)
 
@@ -140,7 +149,7 @@ func makeRequestWithContent(method string, uri string, content string, account A
 	return resp, err
 }
 
-func makeRequest(req *http.Request, account AccountInfo) (resp *http.Response, err error) {
+func makeRequest(req *http.Request, account *AccountInfo) (resp *http.Response, err error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
