@@ -124,6 +124,7 @@ func AddWorklog(account AccountInfo, entry jira.WorklogRecord) error {
 		fmt.Println("Time added successfully")
 		return nil
 	}
+
 	err = fmt.Errorf("Unexpected Response From POST")
 	return err
 }
@@ -134,11 +135,6 @@ func makeRequestWithContent(method string, uri string, content string, account A
 
 	if resp, err = makeRequest(req, account); err != nil {
 		return nil, err
-	}
-	if resp.StatusCode == 401 {
-		fmt.Println("401 response: %v", resp)
-		req, _ = http.NewRequest(method, uri, bytes.NewBufferString(content))
-		return makeRequest(req, account)
 	}
 
 	return resp, err
